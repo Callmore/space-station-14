@@ -19,6 +19,12 @@
     ears: ClothingHeadsetMedical
     belt: ClothingBeltMedicalFilled
     pocket2: BookMedicalReferenceBook
+<<<<<<< HEAD
   storage:
     back:
     - BoxSurvivalMedical
+=======
+  #storage:
+    #back:
+    #- Stuff
+>>>>>>> ba39b6f5512c2befcf7263a1a6a2922339ed5c16
