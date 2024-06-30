@@ -126,6 +126,10 @@
       collection: Weh
     Blup:
       collection: Blup
+    Gasp:
+      collection: FemaleGasp
+    DefaultDeathgasp:
+      collection: FemaleDeathGasp
 
 - type: emoteSounds
   id: MaleSlime
