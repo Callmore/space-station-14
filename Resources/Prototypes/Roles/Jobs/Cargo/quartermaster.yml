@@ -32,8 +32,4 @@
     pocket1: AppraisalTool
   storage:
     back:
-<<<<<<< HEAD
-    - BoxSurvival
-=======
->>>>>>> ba39b6f5512c2befcf7263a1a6a2922339ed5c16
     - Flash
