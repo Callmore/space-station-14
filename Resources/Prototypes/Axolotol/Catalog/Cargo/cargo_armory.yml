@@ -1,0 +1,10 @@
+
+- type: cargoProduct
+  id: ArmoryBlup
+  icon:
+    sprite: Objects/Fun/toys.rsi
+    state: plushie_axolotl
+  product: CrateArmoryBlup
+  cost: 2000
+  category: cargoproduct-category-name-armory
+  group: market
