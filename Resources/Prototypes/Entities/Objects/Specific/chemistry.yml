@@ -498,6 +498,8 @@
   - type: Tag
     tags:
     - Pill
+  - type: SmartFridgeCatagory
+    catagory: pills
 
 - type: entity
   name: pill canister

@@ -93,6 +93,8 @@
         transferForensics: true
       - !type:DoActsBehavior
         acts: [ "Destruction" ]
+  - type: SmartFridgeCatagory
+    catagory: bottles
 
 - type: entity
   parent: BaseChemistryEmptyBottle
