@@ -20,10 +20,6 @@ public sealed class SmartFridgeBoundUserInterface : BoundUserInterface
 
         _menu = new SmartFridgeMenu();
 
-        var smartFridge = EntMan.System<SmartFridgeSystem>();
-        var inventory = smartFridge.GetSortedInventory(Owner);
-        _menu.Populate(inventory);
-
         _menu.OnClose += Close;
         _menu.OpenCenteredLeft();
     }
@@ -43,15 +39,32 @@ public sealed class SmartFridgeBoundUserInterface : BoundUserInterface
         _menu.Dispose();
     }
 
-    protected override void ReceiveMessage(BoundUserInterfaceMessage message)
-    {
-        base.ReceiveMessage(message);
+    // protected override void ReceiveMessage(BoundUserInterfaceMessage message)
+    // {
+    //     base.ReceiveMessage(message);
 
-        if (message is SmartFridgeUpdateInventoryMessage updateInventoryMessage && _menu != null)
+    //     if (message is SmartFridgeUpdateInventoryMessage updateInventoryMessage && _menu != null)
+    //     {
+    //         var smartFridge = EntMan.System<SmartFridgeSystem>();
+    //         var inventory = smartFridge.GetSortedInventory(Owner);
+    //         _menu.Populate(inventory);
+    //     }
+    // }
+
+    protected override void UpdateState(BoundUserInterfaceState state)
+    {
+        base.UpdateState(state);
+
+        if (state is not SmartFridgeBountUserInterfaceState smartFridgeState)
         {
-            var smartFridge = EntMan.System<SmartFridgeSystem>();
-            var inventory = smartFridge.GetSortedInventory(Owner);
-            _menu.Populate(inventory);
+            return;
         }
+
+        if (_menu == null)
+        {
+            return;
+        }
+
+        _menu.Populate(smartFridgeState.Inventory);
     }
 }

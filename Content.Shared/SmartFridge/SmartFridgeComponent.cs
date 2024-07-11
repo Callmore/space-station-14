@@ -13,6 +13,17 @@ public sealed partial class SmartFridgeComponent : Component
 }
 
 [Serializable, NetSerializable]
+public sealed class SmartFridgeBountUserInterfaceState : BoundUserInterfaceState
+{
+    public readonly List<SmartFridgeInventoryGroup> Inventory;
+
+    public SmartFridgeBountUserInterfaceState(List<SmartFridgeInventoryGroup> inventory)
+    {
+        Inventory = inventory;
+    }
+}
+
+[Serializable, NetSerializable]
 public sealed class SmartFridgeInventoryGroup
 {
     [ViewVariables(VVAccess.ReadWrite)]

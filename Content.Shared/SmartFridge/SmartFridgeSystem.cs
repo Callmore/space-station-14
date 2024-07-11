@@ -37,6 +37,8 @@ public sealed class SmartFridgeSystem : EntitySystem
     private void OnSmartFridgeInit(EntityUid uid, SmartFridgeComponent component, ComponentInit args)
     {
         component.Container = _containerSystem.EnsureContainer<Container>(uid, SmartFridgeComponent.ContainerId);
+
+        UpdateUIState(uid, component);
     }
 
     private void OnAfterInteractUsing(EntityUid uid, SmartFridgeComponent component, AfterInteractUsingEvent args)
@@ -110,10 +112,7 @@ public sealed class SmartFridgeSystem : EntitySystem
         if (doInsert && !_containerSystem.Insert(inserted, component.Container))
             return;
 
-        if (_net.IsServer)
-        {
-            _ui.ServerSendUiMessage(uid, SmartFridgeUiKey.Key, new SmartFridgeUpdateInventoryMessage());
-        }
+        UpdateUIState(uid, component);
 
         // if (user != inserted && user != null)
         //     _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(user.Value):player} inserted {ToPrettyString(inserted)} into {ToPrettyString(uid)}");
@@ -125,6 +124,11 @@ public sealed class SmartFridgeSystem : EntitySystem
         // // Maybe do pullable instead? Eh still fine.
         // Joints.RecursiveClearJoints(inserted);
         // UpdateVisualState(uid, component);
+    }
+
+    public void UpdateUIState(EntityUid uid, SmartFridgeComponent component)
+    {
+        _ui.SetUiState(uid, SmartFridgeUiKey.Key, new SmartFridgeBountUserInterfaceState(GetSortedInventory(uid, component)));
     }
 
     public List<SmartFridgeInventoryGroup> GetSortedInventory(EntityUid uid, SmartFridgeComponent? component = null)
