@@ -1,3 +1,4 @@
+using Content.Shared.FixedPoint;
 using Robust.Shared.Containers;
 using Robust.Shared.GameStates;
 using Robust.Shared.Serialization;
@@ -44,15 +45,26 @@ public sealed class SmartFridgeInventoryGroup
 public sealed class SmartFridgeInventoryEntry
 {
     [ViewVariables(VVAccess.ReadWrite)]
-    public NetEntity Entity;
+    public string Group;
 
+    [ViewVariables(VVAccess.ReadWrite)]
+    public NetEntity VisualReference;
+
+    [ViewVariables(VVAccess.ReadWrite)]
+    public string ItemName;
+
+    [ViewVariables(VVAccess.ReadWrite)]
+    public FixedPoint2 UnitCount;
 
     [ViewVariables(VVAccess.ReadWrite)]
     public uint Ammount;
 
-    public SmartFridgeInventoryEntry(NetEntity entity, uint amount)
+    public SmartFridgeInventoryEntry(string group, NetEntity visualReference, string itemName, FixedPoint2 unitCount, uint amount)
     {
-        Entity = entity;
+        Group = group;
+        VisualReference = visualReference;
+        ItemName = itemName;
+        UnitCount = unitCount;
         Ammount = amount;
     }
 }
@@ -61,4 +73,17 @@ public sealed class SmartFridgeInventoryEntry
 public enum SmartFridgeUiKey
 {
     Key,
+}
+
+[Serializable, NetSerializable]
+public sealed class SmartFridgeDispenseItemMessage : BoundUserInterfaceMessage
+{
+    public SmartFridgeInventoryEntry Item;
+    public int Amount;
+
+    public SmartFridgeDispenseItemMessage(SmartFridgeInventoryEntry item, int amount)
+    {
+        Item = item;
+        Amount = amount;
+    }
 }

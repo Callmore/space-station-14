@@ -6,16 +6,18 @@
     xmlns:style="clr-namespace:Content.Client.Stylesheets">
     <BoxContainer Orientation="Vertical">
         <LineEdit Name="SearchBar" PlaceHolder="{Loc 'vending-machine-component-search-filter'}" HorizontalExpand="True"  Margin ="4 4" Access="Public"/>
-        <BoxContainer Name="SmartFridgeItems"
-                      SizeFlagsStretchRatio="8"
-                      VerticalExpand="True"
-                      Margin="4 0"
-                      StyleClasses="transparentBackgroundItemList"
-                      Orientation="Vertical">
-            <smartfridge:SmartFridgeMenuItem></smartfridge:SmartFridgeMenuItem>
-            <smartfridge:SmartFridgeMenuItem></smartfridge:SmartFridgeMenuItem>
-            <smartfridge:SmartFridgeMenuItem></smartfridge:SmartFridgeMenuItem>
-        </BoxContainer>
+        <ScrollContainer HorizontalExpand="True"
+                         VerticalExpand="True"
+                         SizeFlagsStretchRatio="8">
+            <BoxContainer Name="SmartFridgeItems"
+                          SizeFlagsStretchRatio="8"
+                          HorizontalExpand="True"
+                          VerticalExpand="True"
+                          Margin="4 0"
+                          StyleClasses="transparentBackgroundItemList"
+                          Orientation="Vertical">
+            </BoxContainer>
+        </ScrollContainer>
          <!-- Footer -->
         <BoxContainer Orientation="Vertical">
             <PanelContainer StyleClasses="LowDivider" />

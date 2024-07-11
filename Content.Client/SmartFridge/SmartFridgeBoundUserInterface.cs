@@ -1,6 +1,8 @@
 
 using Content.Client.SmartFridge.UI;
 using Content.Shared.SmartFridge;
+using Robust.Shared.Utility;
+using static Robust.Client.UserInterface.Controls.BaseButton;
 
 namespace Content.Client.SmartFridge;
 
@@ -17,9 +19,9 @@ public sealed class SmartFridgeBoundUserInterface : BoundUserInterface
     {
         base.Open();
 
-
         _menu = new SmartFridgeMenu();
 
+        _menu.OnItemDispensed += DispenseItem;
         _menu.OnClose += Close;
         _menu.OpenCenteredLeft();
     }
@@ -35,21 +37,10 @@ public sealed class SmartFridgeBoundUserInterface : BoundUserInterface
         if (_menu == null)
             return;
 
+        _menu.OnItemDispensed -= DispenseItem;
         _menu.OnClose -= Close;
         _menu.Dispose();
     }
-
-    // protected override void ReceiveMessage(BoundUserInterfaceMessage message)
-    // {
-    //     base.ReceiveMessage(message);
-
-    //     if (message is SmartFridgeUpdateInventoryMessage updateInventoryMessage && _menu != null)
-    //     {
-    //         var smartFridge = EntMan.System<SmartFridgeSystem>();
-    //         var inventory = smartFridge.GetSortedInventory(Owner);
-    //         _menu.Populate(inventory);
-    //     }
-    // }
 
     protected override void UpdateState(BoundUserInterfaceState state)
     {
@@ -66,5 +57,12 @@ public sealed class SmartFridgeBoundUserInterface : BoundUserInterface
         }
 
         _menu.Populate(smartFridgeState.Inventory);
+    }
+
+    private void DispenseItem(SmartFridgeInventoryEntry entry, int amount)
+    {
+        Logger.GetSawmill("SmartFridge").Debug($"{PrettyPrint.PrintUserFacing(entry)}: {amount}");
+
+        SendMessage(new SmartFridgeDispenseItemMessage(entry, amount));
     }
 }

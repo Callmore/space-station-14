@@ -1,11 +1,17 @@
 // using System.ComponentModel;
+using System.Diagnostics;
 using Content.Shared.ActionBlocker;
 using Content.Shared.Body.Components;
 using Content.Shared.Chemistry.Components;
+using Content.Shared.Chemistry.Components.SolutionManager;
+using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.FixedPoint;
 using Content.Shared.Hands.Components;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Interaction;
 using Content.Shared.Item;
+using Content.Shared.Labels.Components;
+using Content.Shared.Labels.EntitySystems;
 using Content.Shared.Tag;
 using Content.Shared.Verbs;
 using Robust.Shared.Containers;
@@ -20,6 +26,7 @@ public sealed class SmartFridgeSystem : EntitySystem
     [Dependency] private readonly SharedHandsSystem _handsSystem = default!;
     [Dependency] private readonly ActionBlockerSystem _actionBlockerSystem = default!;
     [Dependency] private readonly SharedContainerSystem _containerSystem = default!;
+    [Dependency] private readonly SharedSolutionContainerSystem _solutionContainerSystem = default!;
 
     [Dependency] private readonly SharedUserInterfaceSystem _ui = default!;
 
@@ -32,16 +39,19 @@ public sealed class SmartFridgeSystem : EntitySystem
         SubscribeLocalEvent<SmartFridgeComponent, GetVerbsEvent<InteractionVerb>>(OnInsertVerb);
         SubscribeLocalEvent<SmartFridgeComponent, ComponentInit>(OnSmartFridgeInit);
         SubscribeLocalEvent<SmartFridgeComponent, AfterInteractUsingEvent>(OnAfterInteractUsing);
+        SubscribeLocalEvent<SmartFridgeComponent, SmartFridgeDispenseItemMessage>(OnDispenseItem);
     }
 
-    private void OnSmartFridgeInit(EntityUid uid, SmartFridgeComponent component, ComponentInit args)
+
+
+    private void OnSmartFridgeInit(Entity<SmartFridgeComponent> ent, ref ComponentInit args)
     {
-        component.Container = _containerSystem.EnsureContainer<Container>(uid, SmartFridgeComponent.ContainerId);
+        ent.Comp.Container = _containerSystem.EnsureContainer<Container>(ent, SmartFridgeComponent.ContainerId);
 
-        UpdateUIState(uid, component);
+        UpdateUIState(ent);
     }
 
-    private void OnAfterInteractUsing(EntityUid uid, SmartFridgeComponent component, AfterInteractUsingEvent args)
+    private void OnAfterInteractUsing(Entity<SmartFridgeComponent> ent, ref AfterInteractUsingEvent args)
     {
         if (args.Handled || !args.CanReach)
             return;
@@ -51,17 +61,17 @@ public sealed class SmartFridgeSystem : EntitySystem
             return;
         }
 
-        if (!CanInsert(uid, component, args.Used) || !_handsSystem.TryDropIntoContainer(args.User, args.Used, component.Container))
+        if (!CanInsert(ent, args.Used) || !_handsSystem.TryDropIntoContainer(args.User, args.Used, ent.Comp.Container))
         {
             return;
         }
 
         // _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(args.User):player} inserted {ToPrettyString(args.Used)} into {ToPrettyString(uid)}");
-        AfterInsert(uid, component, args.Used, args.User);
+        AfterInsert(ent, args.Used, args.User);
         args.Handled = true;
     }
 
-    private void OnInsertVerb(EntityUid uid, SmartFridgeComponent component, GetVerbsEvent<InteractionVerb> args)
+    private void OnInsertVerb(Entity<SmartFridgeComponent> ent, ref GetVerbsEvent<InteractionVerb> args)
     {
         if (!args.CanAccess || !args.CanInteract || args.Hands == null || args.Using == null)
             return;
@@ -69,8 +79,12 @@ public sealed class SmartFridgeSystem : EntitySystem
         if (!_actionBlockerSystem.CanDrop(args.User))
             return;
 
-        if (!CanInsert(uid, component, args.Using.Value))
+        if (!CanInsert(ent, args.Using.Value))
             return;
+
+        var user = args.User;
+        var heldObject = args.Using.Value;
+        var hands = args.Hands;
 
         var insertVerb = new InteractionVerb()
         {
@@ -78,18 +92,18 @@ public sealed class SmartFridgeSystem : EntitySystem
             Category = VerbCategory.Insert,
             Act = () =>
             {
-                _handsSystem.TryDropIntoContainer(args.User, args.Using.Value, component.Container, checkActionBlocker: false, handsComp: args.Hands);
+                _handsSystem.TryDropIntoContainer(user, heldObject, ent.Comp.Container, checkActionBlocker: false, handsComp: hands);
                 // TODO: Admin logging? after insert (yes smartfridges are just disposal bins)
-                AfterInsert(uid, component, args.Using.Value, args.User);
+                AfterInsert(ent, heldObject, user);
             }
         };
 
         args.Verbs.Add(insertVerb);
     }
 
-    public bool CanInsert(EntityUid uid, SmartFridgeComponent component, EntityUid entity)
+    public bool CanInsert(Entity<SmartFridgeComponent> ent, EntityUid entity)
     {
-        if (!Transform(uid).Anchored)
+        if (!Transform(ent).Anchored)
             return false;
 
         var storable = HasComp<ItemComponent>(entity);
@@ -105,14 +119,14 @@ public sealed class SmartFridgeSystem : EntitySystem
         return false;
     }
 
-    public void AfterInsert(EntityUid uid, SmartFridgeComponent component, EntityUid inserted, EntityUid? user = null, bool doInsert = false)
+    public void AfterInsert(Entity<SmartFridgeComponent> ent, EntityUid inserted, EntityUid? user = null, bool doInsert = false)
     {
         // _audioSystem.PlayPvs(component.InsertSound, uid);
 
-        if (doInsert && !_containerSystem.Insert(inserted, component.Container))
+        if (doInsert && !_containerSystem.Insert(inserted, ent.Comp.Container))
             return;
 
-        UpdateUIState(uid, component);
+        UpdateUIState(ent);
 
         // if (user != inserted && user != null)
         //     _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(user.Value):player} inserted {ToPrettyString(inserted)} into {ToPrettyString(uid)}");
@@ -126,21 +140,88 @@ public sealed class SmartFridgeSystem : EntitySystem
         // UpdateVisualState(uid, component);
     }
 
-    public void UpdateUIState(EntityUid uid, SmartFridgeComponent component)
+    private void OnDispenseItem(Entity<SmartFridgeComponent> ent, ref SmartFridgeDispenseItemMessage args)
     {
-        _ui.SetUiState(uid, SmartFridgeUiKey.Key, new SmartFridgeBountUserInterfaceState(GetSortedInventory(uid, component)));
+        // throw new NotImplementedException();
+        // Find item
+        // Log.Debug(ToPrettyString(args.Actor));
+
+        var itemsToRemove = new List<EntityUid>();
+        var toGrab = args.Amount;
+
+        Log.Debug($"Trying to get {toGrab} thing(s) from {ToPrettyString(ent)}.");
+
+        var container = _containerSystem.GetContainer(ent, SmartFridgeComponent.ContainerId);
+        foreach (var entity in container.ContainedEntities)
+        {
+            Log.Debug($"Trying {ToPrettyString(entity)}...");
+
+            var catagory = "unknown";
+            if (TryComp<SmartFridgeCatagoryComponent>(entity, out var smartFridgeCatagoryComponent))
+            {
+                catagory = smartFridgeCatagoryComponent.Catagory;
+            }
+
+            Log.Debug($"Checking group... ({catagory} == {args.Item.Group})");
+            if (catagory != args.Item.Group)
+            {
+                Log.Debug("Did not match, continuing...");
+                continue;
+            }
+
+            Log.Debug($"Checking name... ({GetNameForEntity(entity)} == {args.Item.ItemName})");
+            if (GetNameForEntity(entity) != args.Item.ItemName)
+            {
+                Log.Debug("Did not match, continuing...");
+                continue;
+            }
+
+            Log.Debug($"Checking unit count... ({GetUnitCountOfEntity(entity)} == {args.Item.UnitCount})");
+            if (GetUnitCountOfEntity(entity) != args.Item.UnitCount)
+            {
+                Log.Debug("Did not match, continuing...");
+                continue;
+            }
+
+            itemsToRemove.Add(entity);
+
+            if (toGrab > 0 && itemsToRemove.Count >= toGrab)
+            {
+                break;
+            }
+
+        }
+
+        foreach (var entity in itemsToRemove)
+        {
+            Log.Debug("Attempting to pick up item...");
+            if (!_handsSystem.TryPickupAnyHand(args.Actor, entity))
+            {
+                Log.Debug("Failed, Attempting to drop on floor...");
+                if (!_containerSystem.Remove(entity, container))
+                {
+                    Log.Warning("what");
+                }
+            }
+        }
+
+        UpdateUIState(ent);
+    }
+    public void UpdateUIState(Entity<SmartFridgeComponent> ent)
+    {
+        _ui.SetUiState(ent.Owner, SmartFridgeUiKey.Key, new SmartFridgeBountUserInterfaceState(GetSortedInventory(ent.Owner)));
     }
 
-    public List<SmartFridgeInventoryGroup> GetSortedInventory(EntityUid uid, SmartFridgeComponent? component = null)
+    public List<SmartFridgeInventoryGroup> GetSortedInventory(Entity<SmartFridgeComponent?> ent)
     {
-        if (!Resolve(uid, ref component))
+        if (!Resolve(ent.Owner, ref ent.Comp))
         {
             return [];
         }
 
         var groups = new Dictionary<string, List<SmartFridgeInventoryEntry>>();
 
-        var container = _containerSystem.GetContainer(uid, SmartFridgeComponent.ContainerId);
+        var container = _containerSystem.GetContainer(ent, SmartFridgeComponent.ContainerId);
         foreach (var entity in container.ContainedEntities)
         {
             if (!TryComp<SmartFridgeCatagoryComponent>(entity, out var catagory))
@@ -148,14 +229,41 @@ public sealed class SmartFridgeSystem : EntitySystem
                 continue;
             }
 
+            var name = GetNameForEntity(entity);
+
+            if (name == null)
+            {
+                continue;
+            }
+
+            var unitCount = GetUnitCountOfEntity(entity);
+
             if (!groups.TryGetValue(catagory.Catagory, out var group))
             {
                 group = [];
                 groups[catagory.Catagory] = group;
             }
-            var a = GetNetEntity(entity);
+
+            // Check we already have the value
+            var shouldContinue = false;
+            foreach (var item in group)
+            {
+                if (item.ItemName == name && item.UnitCount == unitCount)
+                {
+                    item.Ammount++;
+                    shouldContinue = true;
+                    break;
+                }
+            }
+            if (shouldContinue)
+            {
+                continue;
+            }
+
+            Log.Debug(name);
+
             // TODO: combine entries
-            group.Add(new SmartFridgeInventoryEntry(a, 1));
+            group.Add(new SmartFridgeInventoryEntry(catagory.Catagory, GetNetEntity(entity), name, unitCount, 1));
         }
 
         var result = new List<SmartFridgeInventoryGroup>();
@@ -165,5 +273,39 @@ public sealed class SmartFridgeSystem : EntitySystem
         }
 
         return result;
+    }
+
+    private string? GetNameForEntity(EntityUid entity)
+    {
+        if (TryComp<LabelComponent>(entity, out var labelComponent))
+        {
+            return labelComponent.CurrentLabel;
+        }
+        else if (TryComp<MetaDataComponent>(entity, out var metaDataComponent))
+        {
+            return metaDataComponent.EntityName;
+        }
+        return null;
+    }
+
+
+    public FixedPoint2 GetUnitCountOfEntity(Entity<SolutionContainerManagerComponent?> ent)
+    {
+        if (!Resolve(ent, ref ent.Comp))
+        {
+            return 0;
+        }
+
+        var unitCount = FixedPoint2.New(-1);
+        if (TryComp<SolutionContainerManagerComponent>(ent, out var solutionContainerManagerComponent))
+        {
+            unitCount = 0;
+            foreach (var (_, solution) in _solutionContainerSystem.EnumerateSolutions((ent, solutionContainerManagerComponent)))
+            {
+                unitCount += solution.Comp.Solution.Volume;
+            }
+        }
+
+        return unitCount;
     }
 }
