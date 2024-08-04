@@ -85,6 +85,8 @@
         type: DisposalUnitBoundUserInterface
   - type: RatKingRummageable
   - type: RequireProjectileTarget
+  - type: ClickToInsert
+    target: disposals
 
 - type: entity
   id: MailingUnit

@@ -1,13 +1,22 @@
 using System.Diagnostics.CodeAnalysis;
+using Content.Shared.Administration.Logs;
 using Content.Shared.Body.Components;
+using Content.Shared.Containers;
+using Content.Shared.Database;
 using Content.Shared.Disposal.Components;
 using Content.Shared.DoAfter;
 using Content.Shared.DragDrop;
 using Content.Shared.Emag.Systems;
+using Content.Shared.Hands.Components;
+using Content.Shared.Hands.EntitySystems;
+using Content.Shared.IdentityManagement;
 using Content.Shared.Item;
+using Content.Shared.Popups;
 using Content.Shared.Throwing;
 using Content.Shared.Whitelist;
 using Robust.Shared.Audio;
+using Robust.Shared.Audio.Systems;
+using Robust.Shared.Containers;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Events;
 using Robust.Shared.Physics.Systems;
@@ -27,6 +36,13 @@ public abstract class SharedDisposalUnitSystem : EntitySystem
     [Dependency] protected readonly MetaDataSystem Metadata = default!;
     [Dependency] protected readonly SharedJointSystem Joints = default!;
     [Dependency] private readonly EntityWhitelistSystem _whitelistSystem = default!;
+    [Dependency] protected readonly SharedPopupSystem PopupSystem = default!;
+    [Dependency] protected readonly SharedDoAfterSystem DoAfterSystem = default!;
+    [Dependency] protected readonly SharedAudioSystem AudioSystem = default!;
+    [Dependency] private readonly SharedContainerSystem _containerSystem = default!;
+    [Dependency] private readonly ISharedAdminLogManager _adminLogger = default!;
+    [Dependency] private readonly SharedUserInterfaceSystem _ui = default!;
+    [Dependency] private readonly SharedAppearanceSystem _appearance = default!;
 
     protected static TimeSpan ExitAttemptDelay = TimeSpan.FromSeconds(0.5);
 
@@ -151,5 +167,153 @@ public abstract class SharedDisposalUnitSystem : EntitySystem
             Engaged = engaged;
             RecentlyEjected = recentlyEjected;
         }
+    }
+
+    public bool TryInsert(EntityUid unitId, EntityUid toInsertId, EntityUid? userId, SharedDisposalUnitComponent? unit = null)
+    {
+        if (!Resolve(unitId, ref unit))
+            return false;
+
+        if (userId.HasValue && !HasComp<HandsComponent>(userId) && toInsertId != userId) // Mobs like mouse can Jump inside even with no hands
+        {
+            PopupSystem.PopupEntity(Loc.GetString("disposal-unit-no-hands"), userId.Value, userId.Value, PopupType.SmallCaution);
+            return false;
+        }
+
+        if (!CanInsert(unitId, unit, toInsertId))
+            return false;
+
+        bool insertingSelf = userId == toInsertId;
+
+        var delay = insertingSelf ? unit.EntryDelay : unit.DraggedEntryDelay;
+
+        if (userId != null && !insertingSelf)
+            PopupSystem.PopupEntity(Loc.GetString("disposal-unit-being-inserted", ("user", Identity.Entity((EntityUid)userId, EntityManager))), toInsertId, toInsertId, PopupType.Large);
+
+        if (delay <= 0 || userId == null)
+        {
+            AfterInsert(unitId, unit, toInsertId, userId, doInsert: true);
+            return true;
+        }
+
+        // Can't check if our target AND disposals moves currently so we'll just check target.
+        // if you really want to check if disposals moves then add a predicate.
+        var doAfterArgs = new DoAfterArgs(EntityManager, userId.Value, delay, new DisposalDoAfterEvent(), unitId, target: toInsertId, used: unitId)
+        {
+            BreakOnDamage = true,
+            BreakOnMove = true,
+            NeedHand = false
+        };
+
+        DoAfterSystem.TryStartDoAfter(doAfterArgs);
+        return true;
+    }
+
+    public void AfterInsert(EntityUid uid, SharedDisposalUnitComponent component, EntityUid inserted, EntityUid? user = null, bool doInsert = false)
+    {
+        AudioSystem.PlayPvs(component.InsertSound, uid);
+
+        if (doInsert && !_containerSystem.Insert(inserted, component.Container))
+            return;
+
+        if (user != inserted && user != null)
+            _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(user.Value):player} inserted {ToPrettyString(inserted)} into {ToPrettyString(uid)}");
+
+        QueueAutomaticEngage(uid, component);
+
+        _ui.CloseUi(uid, SharedDisposalUnitComponent.DisposalUnitUiKey.Key, inserted);
+
+        // Maybe do pullable instead? Eh still fine.
+        Joints.RecursiveClearJoints(inserted);
+        UpdateVisualState(uid, component);
+    }
+
+    /// <summary>
+    /// If something is inserted (or the likes) then we'll queue up an automatic flush in the future.
+    /// </summary>
+    public void QueueAutomaticEngage(EntityUid uid, SharedDisposalUnitComponent component, MetaDataComponent? metadata = null)
+    {
+        if (component.Deleted || !component.AutomaticEngage || !component.Powered && component.Container.ContainedEntities.Count == 0)
+        {
+            return;
+        }
+
+        var pauseTime = Metadata.GetPauseTime(uid, metadata);
+        var automaticTime = GameTiming.CurTime + component.AutomaticEngageTime - pauseTime;
+        var flushTime = TimeSpan.FromSeconds(Math.Min((component.NextFlush ?? TimeSpan.MaxValue).TotalSeconds, automaticTime.TotalSeconds));
+
+        component.NextFlush = flushTime;
+        Dirty(uid, component);
+    }
+
+    public void UpdateVisualState(EntityUid uid, SharedDisposalUnitComponent component, bool flush = false)
+    {
+        if (!TryComp(uid, out AppearanceComponent? appearance))
+        {
+            return;
+        }
+
+        if (!Transform(uid).Anchored)
+        {
+            _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.VisualState, SharedDisposalUnitComponent.VisualState.UnAnchored, appearance);
+            _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.Handle, SharedDisposalUnitComponent.HandleState.Normal, appearance);
+            _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.Light, SharedDisposalUnitComponent.LightStates.Off, appearance);
+            return;
+        }
+
+        var state = GetState(uid, component);
+
+        switch (state)
+        {
+            case DisposalsPressureState.Flushed:
+                _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.VisualState, SharedDisposalUnitComponent.VisualState.OverlayFlushing, appearance);
+                break;
+            case DisposalsPressureState.Pressurizing:
+                _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.VisualState, SharedDisposalUnitComponent.VisualState.OverlayCharging, appearance);
+                break;
+            case DisposalsPressureState.Ready:
+                _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.VisualState, SharedDisposalUnitComponent.VisualState.Anchored, appearance);
+                break;
+        }
+
+        _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.Handle, component.Engaged
+            ? SharedDisposalUnitComponent.HandleState.Engaged
+            : SharedDisposalUnitComponent.HandleState.Normal, appearance);
+
+        if (!component.Powered)
+        {
+            _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.Light, SharedDisposalUnitComponent.LightStates.Off, appearance);
+            return;
+        }
+
+        var lightState = SharedDisposalUnitComponent.LightStates.Off;
+
+        if (component.Container.ContainedEntities.Count > 0)
+        {
+            lightState |= SharedDisposalUnitComponent.LightStates.Full;
+        }
+
+        if (state is DisposalsPressureState.Pressurizing or DisposalsPressureState.Flushed)
+        {
+            lightState |= SharedDisposalUnitComponent.LightStates.Charging;
+        }
+        else
+        {
+            lightState |= SharedDisposalUnitComponent.LightStates.Ready;
+        }
+
+        _appearance.SetData(uid, SharedDisposalUnitComponent.Visuals.Light, lightState, appearance);
+    }
+
+
+    protected void OnTryInsertEntity(Entity<SharedDisposalUnitComponent> ent, ref TryInsertEntityEvent args)
+    {
+        args.Blocked = !CanInsert(ent, ent, args.Entity);
+        args.Handled = true;
+    }
+
+    protected void OnAfterInsertEntity(Entity<SharedDisposalUnitComponent> ent, ref AfterInsertEntityEvent args)
+    {
+        AfterInsert(ent, ent, args.Entity, args.User);
     }
 }

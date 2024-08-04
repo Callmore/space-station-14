@@ -11,6 +11,7 @@ using Robust.Shared.Audio.Systems;
 using Robust.Shared.GameStates;
 using Robust.Shared.Physics.Events;
 using static Content.Shared.Disposal.Components.SharedDisposalUnitComponent;
+using Content.Shared.Containers;
 
 namespace Content.Client.Disposal.Systems;
 
@@ -36,6 +37,9 @@ public sealed class DisposalUnitSystem : SharedDisposalUnitSystem
 
         SubscribeLocalEvent<DisposalUnitComponent, ComponentInit>(OnComponentInit);
         SubscribeLocalEvent<DisposalUnitComponent, AppearanceChangeEvent>(OnAppearanceChange);
+
+        SubscribeLocalEvent<DisposalUnitComponent, TryInsertEntityEvent>((Entity<DisposalUnitComponent> e, ref TryInsertEntityEvent args) => OnTryInsertEntity((e, e.Comp), ref args));
+        SubscribeLocalEvent<DisposalUnitComponent, AfterInsertEntityEvent>((Entity<DisposalUnitComponent> e, ref AfterInsertEntityEvent args) => OnAfterInsertEntity((e, e.Comp), ref args));
     }
 
     private void OnHandleState(EntityUid uid, DisposalUnitComponent component, ref ComponentHandleState args)

@@ -86,3 +86,5 @@
       enum.SmartFridgeUiKey.Key:
         type: SmartFridgeBoundUserInterface
   - type: SmartFridge
+  - type: ClickToInsert
+    target: smartfridge

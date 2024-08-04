@@ -5,6 +5,7 @@ using Content.Shared.Body.Components;
 using Content.Shared.Chemistry.Components;
 using Content.Shared.Chemistry.Components.SolutionManager;
 using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.Containers;
 using Content.Shared.FixedPoint;
 using Content.Shared.Hands.Components;
 using Content.Shared.Hands.EntitySystems;
@@ -17,6 +18,7 @@ using Content.Shared.Verbs;
 using Robust.Shared.Containers;
 using Robust.Shared.Network;
 using Robust.Shared.Physics.Components;
+using Robust.Shared.Utility;
 
 namespace Content.Shared.SmartFridge;
 
@@ -30,19 +32,21 @@ public sealed class SmartFridgeSystem : EntitySystem
 
     [Dependency] private readonly SharedUserInterfaceSystem _ui = default!;
 
-    [Dependency] private readonly INetManager _net = default!;
+    // [Dependency] private readonly INetManager _net = default!;
+    // [Dependency] private readonly MetaDataSystem _metaDataSystem = default!;
 
     public override void Initialize()
     {
         base.Initialize();
 
-        SubscribeLocalEvent<SmartFridgeComponent, GetVerbsEvent<InteractionVerb>>(OnInsertVerb);
+        // SubscribeLocalEvent<SmartFridgeComponent, GetVerbsEvent<InteractionVerb>>(OnInsertVerb);
         SubscribeLocalEvent<SmartFridgeComponent, ComponentInit>(OnSmartFridgeInit);
-        SubscribeLocalEvent<SmartFridgeComponent, AfterInteractUsingEvent>(OnAfterInteractUsing);
+        // SubscribeLocalEvent<SmartFridgeComponent, AfterInsertEntityEvent>(OnAfterInteractUsing);
         SubscribeLocalEvent<SmartFridgeComponent, SmartFridgeDispenseItemMessage>(OnDispenseItem);
+
+        SubscribeLocalEvent<SmartFridgeComponent, TryInsertEntityEvent>(OnTryInsertEntity);
+        SubscribeLocalEvent<SmartFridgeComponent, AfterInsertEntityEvent>(OnAfterInsertEntity);
     }
-
-
 
     private void OnSmartFridgeInit(Entity<SmartFridgeComponent> ent, ref ComponentInit args)
     {
@@ -51,93 +55,28 @@ public sealed class SmartFridgeSystem : EntitySystem
         UpdateUIState(ent);
     }
 
-    private void OnAfterInteractUsing(Entity<SmartFridgeComponent> ent, ref AfterInteractUsingEvent args)
+    private void OnTryInsertEntity(Entity<SmartFridgeComponent> ent, ref TryInsertEntityEvent args)
     {
-        if (args.Handled || !args.CanReach)
-            return;
-
-        if (!HasComp<HandsComponent>(args.User))
+        if (args.Handled)
         {
             return;
         }
 
-        if (!CanInsert(ent, args.Used) || !_handsSystem.TryDropIntoContainer(args.User, args.Used, ent.Comp.Container))
-        {
-            return;
-        }
-
-        // _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(args.User):player} inserted {ToPrettyString(args.Used)} into {ToPrettyString(uid)}");
-        AfterInsert(ent, args.Used, args.User);
         args.Handled = true;
-    }
 
-    private void OnInsertVerb(Entity<SmartFridgeComponent> ent, ref GetVerbsEvent<InteractionVerb> args)
-    {
-        if (!args.CanAccess || !args.CanInteract || args.Hands == null || args.Using == null)
-            return;
-
-        if (!_actionBlockerSystem.CanDrop(args.User))
-            return;
-
-        if (!CanInsert(ent, args.Using.Value))
-            return;
-
-        var user = args.User;
-        var heldObject = args.Using.Value;
-        var hands = args.Hands;
-
-        var insertVerb = new InteractionVerb()
+        if (!TryComp<SmartFridgeCatagoryComponent>(args.Entity, out var smartFridgeCatagory))
         {
-            Text = Name(args.Using.Value),
-            Category = VerbCategory.Insert,
-            Act = () =>
-            {
-                _handsSystem.TryDropIntoContainer(user, heldObject, ent.Comp.Container, checkActionBlocker: false, handsComp: hands);
-                // TODO: Admin logging? after insert (yes smartfridges are just disposal bins)
-                AfterInsert(ent, heldObject, user);
-            }
-        };
-
-        args.Verbs.Add(insertVerb);
-    }
-
-    public bool CanInsert(Entity<SmartFridgeComponent> ent, EntityUid entity)
-    {
-        if (!Transform(ent).Anchored)
-            return false;
-
-        var storable = HasComp<ItemComponent>(entity);
-
-        // if (_whitelistSystem.IsBlacklistPass(component.Blacklist, entity) ||
-        //     _whitelistSystem.IsWhitelistFail(component.Whitelist, entity))
-        //     return false;
-
-        if (TryComp<PhysicsComponent>(entity, out var physics) && physics.CanCollide || storable)
-        {
-            return true;
+            args.Blocked = true;
+            return;
         }
-        return false;
+
+        // TODO: implement a check!!!
+        return;
     }
 
-    public void AfterInsert(Entity<SmartFridgeComponent> ent, EntityUid inserted, EntityUid? user = null, bool doInsert = false)
+    private void OnAfterInsertEntity(Entity<SmartFridgeComponent> ent, ref AfterInsertEntityEvent args)
     {
-        // _audioSystem.PlayPvs(component.InsertSound, uid);
-
-        if (doInsert && !_containerSystem.Insert(inserted, ent.Comp.Container))
-            return;
-
         UpdateUIState(ent);
-
-        // if (user != inserted && user != null)
-        //     _adminLogger.Add(LogType.Action, LogImpact.Medium, $"{ToPrettyString(user.Value):player} inserted {ToPrettyString(inserted)} into {ToPrettyString(uid)}");
-
-        // QueueAutomaticEngage(uid, component);
-
-        // _ui.CloseUi(uid, SharedDisposalUnitComponent.DisposalUnitUiKey.Key, inserted);
-
-        // // Maybe do pullable instead? Eh still fine.
-        // Joints.RecursiveClearJoints(inserted);
-        // UpdateVisualState(uid, component);
     }
 
     private void OnDispenseItem(Entity<SmartFridgeComponent> ent, ref SmartFridgeDispenseItemMessage args)
@@ -281,11 +220,7 @@ public sealed class SmartFridgeSystem : EntitySystem
         {
             return labelComponent.CurrentLabel;
         }
-        else if (TryComp<MetaDataComponent>(entity, out var metaDataComponent))
-        {
-            return metaDataComponent.EntityName;
-        }
-        return null;
+        return Name(entity);
     }
 
 

@@ -5,6 +5,6 @@ namespace Content.Shared.SmartFridge;
 [RegisterComponent, NetworkedComponent]
 public sealed partial class SmartFridgeCatagoryComponent : Component
 {
-    [DataField("catagory", required: true)]
+    [DataField]
     public string Catagory = string.Empty;
 }
