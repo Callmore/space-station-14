@@ -1,0 +1,19 @@
+﻿- type: entity
+  id: ChemiCompiler
+  parent: SmallConstructibleMachine
+  placement:
+    mode: SnapgridCenter
+  components:
+#  - type: ChemiCompiler
+  - type: UserInterface
+    interfaces:
+      enum.ChemiCompilerUiKey.Key:
+        type: ChemiCompilerBoundUserInterface
+  - type: ActivatableUI
+    key: enum.ChemiCompilerUiKey.Key
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: Structures/dispensers.rsi
+    state: industrial-working
+    snapCardinals: true

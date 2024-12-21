@@ -1,0 +1,24 @@
+﻿<controls:FancyWindow xmlns="https://spacestation14.io"
+                      xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
+                      Title="ChemiCompiler">
+    <BoxContainer Orientation="Vertical">
+        <Label Text="Code"></Label>
+        <TextEdit></TextEdit>
+
+        <Label Text="Reservoirs"></Label>
+        <GridContainer Columns="5">
+            <!-- TODO: DO NOT DO THIS -->
+            <Button Text="r1"></Button>
+            <Button Text="r2"></Button>
+            <Button Text="r3"></Button>
+            <Button Text="r4"></Button>
+            <Button Text="r5"></Button>
+            <Button Text="r6"></Button>
+            <Button Text="r7"></Button>
+            <Button Text="r8"></Button>
+            <Button Text="r9"></Button>
+            <Button Text="r10"></Button>
+        </GridContainer>
+    </BoxContainer>
+
+</controls:FancyWindow>
