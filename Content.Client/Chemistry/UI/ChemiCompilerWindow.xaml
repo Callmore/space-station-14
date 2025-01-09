@@ -2,11 +2,8 @@
                       xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
                       Title="ChemiCompiler">
     <BoxContainer Orientation="Vertical">
-        <Label Text="Code"></Label>
-        <TextEdit></TextEdit>
-
         <Label Text="Reservoirs"></Label>
-        <GridContainer Columns="5">
+        <GridContainer Columns="5" Name="ReservoirContainer">
             <!-- TODO: DO NOT DO THIS -->
             <Button Text="r1"></Button>
             <Button Text="r2"></Button>
@@ -19,6 +16,9 @@
             <Button Text="r9"></Button>
             <Button Text="r10"></Button>
         </GridContainer>
+
+        <Label Text="Code"></Label>
+        <TextEdit></TextEdit>
     </BoxContainer>
 
 </controls:FancyWindow>

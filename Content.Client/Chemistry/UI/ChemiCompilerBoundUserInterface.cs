@@ -13,5 +13,7 @@ public sealed class ChemiCompilerBoundUserInterface(EntityUid owner, Enum uiKey)
         base.Open();
 
         _window = this.CreateWindow<ChemiCompilerWindow>();
+
+        _window.SetReservoirCount(10);
     }
 }

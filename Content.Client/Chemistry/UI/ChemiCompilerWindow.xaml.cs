@@ -6,6 +6,9 @@ namespace Content.Client.Chemistry.UI;
 [GenerateTypedNameReferences]
 public sealed partial class ChemiCompilerWindow : FancyWindow
 {
+    public void SetReservoirCount(int count)
+    {
 
+    }
 }
 
